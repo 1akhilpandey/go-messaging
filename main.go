@@ -5,54 +5,58 @@ import (
 	"net/http"
 
 	"github.com/1akhilpandey/go-messaging/app/api/handler"
+	authMiddleware "github.com/1akhilpandey/go-messaging/app/middleware"
 	"github.com/1akhilpandey/go-messaging/app/ws"
 	"github.com/1akhilpandey/go-messaging/db"
-
 	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	chiMiddleware "github.com/go-chi/chi/v5/middleware"
 )
 
 func main() {
-	// Initialize the database
-	database, err := db.InitDB("chatapp.db")
+	// Set up the database and apply migrations.
+	database, err := db.SetupDatabase("chatapp.db")
 	if err != nil {
-		log.Fatalf("Could not initialize database: %v", err)
+		log.Fatalf("Database setup failed: %v", err)
 	}
 	defer database.Close()
 
-	// Create a new WebSocket hub and run it
+	// Create a new WebSocket hub and run it.
 	hub := ws.NewHub()
 	go hub.Run()
 
-	// Set up router
+	// Set up router.
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
-	// TODO: Add session middleware here if implemented
+	r.Use(chiMiddleware.Logger)
+	r.Use(chiMiddleware.Recoverer)
 
-	// User routes
+	// User routes.
 	r.Route("/user", func(r chi.Router) {
+		// Public endpoints.
 		r.Post("/signup", handler.CreateUserHandler)
-		r.Post("/login", func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "login not implemented", http.StatusNotImplemented)
-		})
-		r.Post("/logout", func(w http.ResponseWriter, r *http.Request) {
-			http.Error(w, "logout not implemented", http.StatusNotImplemented)
+		r.Post("/login", handler.LoginUserHandler)
+
+		// Protected endpoint.
+		r.Group(func(r chi.Router) {
+			r.Use(authMiddleware.AuthMiddleware)
+			r.Post("/logout", handler.LogoutUserHandler)
 		})
 	})
 
-	// Chat routes
-	r.Route("/chat", func(r chi.Router) {
-		r.Get("/messages", handler.GetChatHandler)
-		r.Post("/message", handler.CreateChatHandler)
-		// Group chat endpoints not implemented
-		//r.Post("/group", handler.CreateGroup)
-		//r.Get("/group/{groupID}", handler.GetGroup)
-	})
+	// Protected routes.
+	r.Group(func(r chi.Router) {
+		r.Use(authMiddleware.AuthMiddleware)
 
-	// WebSocket endpoint
-	r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
-		ws.ServeWs(hub, w, r)
+		// Chat routes.
+		r.Route("/chat", func(r chi.Router) {
+			r.Get("/messages/{id}", handler.GetChatHandler)
+			r.Post("/message", handler.CreateChatHandler)
+			r.Get("/user", handler.GetUserChatsHandler)
+		})
+
+		// WebSocket endpoint.
+		r.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+			ws.ServeWs(hub, w, r)
+		})
 	})
 
 	log.Println("Server starting on :8080")

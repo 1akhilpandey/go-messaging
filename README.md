@@ -1,4 +1,6 @@
 # go-messaging
+## Demo:
+https://www.loom.com/share/b7504e5fd7254b99a5c251d61fa24843?sid=ecc5532b-6652-4257-9137-f3426e6b1da2
 
 ## Overview
 go-messaging is a Go-based messaging backend designed to handle both RESTful API requests and WebSocket-based real-time communication. The project is structured in a modular fashion, separating concerns like API controllers, middleware for authentication, WebSocket connections for real-time updates, and a robust database integration.
